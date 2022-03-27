@@ -715,7 +715,6 @@ aeabi_parse_arm_attributes(void *data, size_t length)
 #undef MOVE
 }
 
-#ifdef __CheriBSD__
 /*
  * elf_note_analyse_cheribsd() looks for a second ELF note indicating that
  * a binary was built for CheriBSD and overwrites OS information relevant for
@@ -771,7 +770,6 @@ elf_note_analyse_cheribsd(Elf_Data *data, GElf_Ehdr *elfhdr, struct os_info *oi)
 	free(oi->version);
 	xasprintf(&oi->version, "%d", version);
 }
-#endif
 
 static bool
 elf_note_analyse(Elf_Data *data, GElf_Ehdr *elfhdr, struct os_info *oi)
@@ -867,9 +865,7 @@ elf_note_analyse(Elf_Data *data, GElf_Ehdr *elfhdr, struct os_info *oi)
 		xasprintf(&oi->version, "%d", version / 100000);
 	}
 
-#ifdef __CheriBSD__
 	elf_note_analyse_cheribsd(data, elfhdr, oi);
-#endif
 	return (true);
 }
 
