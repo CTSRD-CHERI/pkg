@@ -4,9 +4,9 @@
 use cc cc-lib cc-shared pkg-config
 
 set maj_ver 1
-set med_ver 20
-set min_ver 5
-set dev_ver 0
+set med_ver 21
+set min_ver 99
+set dev_ver 3
 define PKG_API [expr {$maj_ver * 1000000 + $med_ver * 1000 + $min_ver}]
 define VERSION $maj_ver.$med_ver.$min_ver[expr {$dev_ver ? ".$dev_ver" : ""}]
 
@@ -17,8 +17,11 @@ options {
 	with-libarchive.pc => "build with libarchive getting flags via pc files"
 	with-coverage => "build with llvm coverage support"
 	with-asan => "build with libasan support"
-	with-ubsan => "Build with libubsan support"
-	default-format:txz => "Default compression format: tzst, txz (default), tbz, tar"
+	with-lsan => "build with liblsan support"
+	with-ubsan => "build with libubsan support"
+	with-libcurl => "build with external libcurl"
+	with-openssl.pc => "build with openssl getting flags via pc files"
+	default-format:txz => "Default compression format: tzst (default), txz, tbz, tar"
 }
 
 if {[opt-str pkgconfigdir dir]} {
@@ -43,7 +46,7 @@ if {[opt-str default-format fmt]} {
 	    "default" { user-error "Invalid format $fmt" }
 	define DEFAULT_COMPRESSION $comp
 } else {
-	define DEFAULT_COMPRESSION TXZ
+	define DEFAULT_COMPRESSION TZS
 }
 
 cc-check-tools ar ranlib strip
@@ -273,7 +276,7 @@ cc-with { -libs { -ljail} } {
 cc-check-includes bsd/err.h bsd/libutil.h bsd/readpassphrase.h \
 	bsd/stdio.h bsd/stdlib.h bsd/strlib.h bsd/string.h \
 	bsd/sys/cdefs.h bsd/sys/queue.h bsd/unistd.h
- 
+
 if {[opt-bool with-asan]} {
 	define-append ASAN_CFLAGS -O0 -ggdb -fsanitize=address
 	define-append ASAN_LDFLAGS -fsanitize=address
@@ -283,6 +286,15 @@ if {[opt-bool with-asan]} {
 	}
 	define asan 1
 	undefine HAVE_STATIC
+}
+if {[opt-bool with-lsan]} {
+	define-append LSAN_CFLAGS -O0 -ggdb -fsanitize=leak
+	define-append LSAN_LDFLAGS -fsanitize=leak
+	if {[string match *-linux* [get-define host]]} {
+		# LSAN depends on libdl for dlsym when building with GCC
+		define-append LSAN_LDFLAGS -ldl
+	}
+	define lsan 1
 }
 if {[opt-bool with-ubsan]} {
 	# Avoid alignment error when building with UBSan inside _mum_hash_avx2
@@ -298,7 +310,7 @@ if {[opt-bool with-coverage]} {
 # disable capsicum when coverage is used because coverage does not work in
 # capsicum mode
 } else {
-# capsicum 
+# capsicum
 	if {[cc-check-functions cap_sandboxed]} {
 		define-feature capsicum
 			cc-check-includes sys/capsicum.h
@@ -320,6 +332,14 @@ if {[pkg-config-init 0]} {
 			define PKG_LIBDNS_LIBS_STATIC [exec pkg-config --static --libs-only-l libldns]
 		}
 	}
+	if {[opt-bool with-libcurl]} {
+		if {![pkg-config libcurl]} {
+			user-error "Unable to find libcurl"
+		}
+		user-notice LIBCURL_CFLAGS=[get-define PKG_LIBCURL_CFLAGS]
+		user-notice LIBCURL_LDLAGS=[get-define PKG_LIBCURL_LDFLAGS]
+		user-notice LIBCURL_LIBS=[get-define PKG_LIBCURL_LIBS]
+	}
 	if {[opt-bool with-libarchive.pc]} {
 		if {![pkg-config libarchive]} {
 			user-error "Unable to find libarchive"
@@ -329,6 +349,18 @@ if {[pkg-config-init 0]} {
 				cc-check-functions archive_write_add_filter_zstd
 			}
 		}
+		user-notice LIBARCHIVE_CFLAGS=[get-define PKG_LIBARCHIVE_CFLAGS]
+		user-notice LIBARCHIVE_LDLAGS=[get-define PKG_LIBARCHIVE_LDFLAGS]
+		user-notice LIBARCHIVE_LIBS=[get-define PKG_LIBARCHIVE_LIBS]
+	}
+
+	if {[opt-bool with-openssl.pc]} {
+		if {![pkg-config openssl]} {
+			user-error "Unable to find openssl"
+		}
+		user-notice OPENSSL_CFLAGS=[get-define PKG_OPENSSL_CFLAGS]
+		user-notice OPENSSL_LDLAGS=[get-define PKG_OPENSSL_LDFLAGS]
+		user-notice OPENSSL_LIBS=[get-define PKG_OPENSSL_LIBS]
 	}
 }
 
@@ -356,7 +388,8 @@ foreach dir [list external/blake2 external/picosat \
 	external/linenoise external/sqlite \
 	external compat libpkg libpkg/repo libpkg/repo/binary src \
 	external/libucl external/libelf external/libmachista tests docs \
-	external/liblua external/msgpuck external/yxml scripts external/libcurl] {
+	external/liblua external/yxml scripts external/libcurl external/libder \
+	external/libecc] {
 	make-template $dir/Makefile.autosetup $dir/Makefile
 }
 
