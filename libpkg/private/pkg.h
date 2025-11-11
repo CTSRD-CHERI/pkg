@@ -34,7 +34,6 @@
 #include <sys/param.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
-#include <sys/elf_common.h>
 
 #include <archive.h>
 #include <sqlite3.h>
